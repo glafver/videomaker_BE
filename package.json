@@ -1,0 +1,15 @@
+{
+  "name": "videomaker_server",
+  "version": "1.0.0",
+  "description": "Backend support for Videomaker",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Glafira Veretennikova",
+  "license": "ISC",
+  "dependencies": {
+    "base64url": "^3.0.1",
+    "express": "^4.18.2"
+  }
+}
