@@ -1,7 +1,9 @@
 const express = require('express');
 const crypto = require('crypto');
-const { spawn } = require("node:child_process");
-const cors = require('cors')
+const { spawn, execSync } = require('child_process');
+const cors = require('cors');
+const fs = require('fs');
+const axios = require('axios');
 
 const port = 3001
 
@@ -12,7 +14,7 @@ app.use(cors());
 
 var corsOptions = {
     origin: 'http://127.0.0.1:5173',
-    optionsSuccessStatus: 200 // some legacy browsers (IE11, various SmartTVs) choke on 204
+    optionsSuccessStatus: 200
 }
 
 const videoStatuses = []
@@ -22,8 +24,56 @@ const randomValue = (length) => {
     console.log(value)
     return value
 }
+const downloadImages = async (id, urls) => {
+    let dir = `${__dirname}/${id}`;
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir);
+    }
 
-const createVideo = (id, instructions) => {
+    let i = 0
+    const paths = []
+    for (const url of urls) {
+        const path = `${dir}/${++i}.jpg`
+        await downloadImage(url, path)
+        console.log('pushed path:' + path)
+        paths.push(path)
+    }
+
+    return paths
+}
+
+const downloadImage = async (url, filepath) => {
+    const response = await axios({
+        url,
+        method: 'GET',
+        responseType: 'stream'
+    });
+    return new Promise((resolve, reject) => {
+        response.data.pipe(fs.createWriteStream(filepath))
+            .on('error', reject)
+            .once('close', () => {
+                console.log('Done', filepath)
+                resolve(filepath)
+            });
+    });
+}
+
+const alignPictures = async (id, paths) => {
+    const result = execSync(`convert ${__dirname}/${id}/*.jpg -resize 1920x1080 -gravity center -background "#222529" -extent 1920x1080 ${__dirname}/${id}/ready.jpg`)
+    console.log('align pics result: ', result)
+    for (let i = 0; i < paths.length; i++) {
+        paths[i] = `${__dirname}/${id}/ready-${i}.jpg`
+    }
+}
+
+const deleteFolder = (id) => {
+    let dir = `${__dirname}/${id}`
+    fs.rmSync(dir, { recursive: true, force: true });
+    console.log('Folder deleted: ' + dir);
+}
+
+
+const createVideo = (id, instructions, paths) => {
 
     videoStatuses[`${id}`] = 'IN_PROGRESS'
 
@@ -42,7 +92,7 @@ const createVideo = (id, instructions) => {
             const isFirstOrLast = (i === 0 || i + 1 === instructions.slideshow.length)
             const isLast = (i + 1 === instructions.slideshow.length)
             const isPreLast = (i + 2 === instructions.slideshow.length)
-            commandArgs.push('-loop', '1', '-t', slide.duration + (amountOfSlides > 1 ? (isFirstOrLast ? 1 : durationAddition) : 0), '-i', slide.src)
+            commandArgs.push('-loop', '1', '-t', slide.duration + (amountOfSlides > 1 ? (isFirstOrLast ? 1 : durationAddition) : 0), '-i', paths[i])
 
             console.log('transition from slide is: ', slide.transition)
             if (amountOfSlides > 1) {
@@ -84,6 +134,7 @@ const createVideo = (id, instructions) => {
             } else {
                 videoStatuses[`${id}`] = 'FAILED'
             }
+            deleteFolder(id)
         });
 
     } catch (e) {
@@ -94,11 +145,18 @@ const createVideo = (id, instructions) => {
 
 }
 
-app.post('/video', cors(corsOptions), (req, res) => {
+app.post('/video', cors(corsOptions), async (req, res) => {
     console.log('post video', req.body)
     const id = randomValue(32)
 
-    createVideo(id, req.body)
+    const urls = req.body.slideshow.map(slide => {
+        return slide.src
+    })
+
+    console.log(urls)
+    const paths = await downloadImages(id, urls)
+    alignPictures(id, paths)
+    createVideo(id, req.body, paths)
 
     res.status(201);
     res.json({ id })
