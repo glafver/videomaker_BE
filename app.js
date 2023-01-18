@@ -76,7 +76,7 @@ const downloadImage = async (url, filepath) => {
 }
 
 const alignPictures = async (id, paths) => {
-    const result = execSync(`convert ${__dirname}/${id}/*.jpg -resize 1920x1080 -gravity center -background "#222529" -extent 1920x1080 ${__dirname}/${id}/ready.jpg`)
+    const result = execSync(`convert ${__dirname}/${id}/*.jpg -resize 1920x1080 -gravity center -background "#222529" -extent 1920x1080 ${__dirname}/${id}/ready${paths.length > 1 ? '' : '-0'}.jpg`)
     // console.log('align pics result: ', result)
     for (let i = 0; i < paths.length; i++) {
         paths[i] = `${__dirname}/${id}/ready-${i}.jpg`
@@ -137,7 +137,7 @@ const createVideo = (id, instructions, paths) => {
         })
 
         // console.log('transition:', transition)
-
+        // console.log('amount ', amountOfSlides)
         if (amountOfSlides > 1) {
             commandArgs.push('-filter_complex', transition)
             commandArgs.push('-c:v', 'libx264', '-r', '25', '-map', `[out${i}]`)
