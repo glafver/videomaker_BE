@@ -36,11 +36,14 @@ const corsOptions = {
 const videoStatuses = []
 const videoUrls = []
 
+// Generates random hex sequense with specified length
 const randomValue = (length) => {
     const value = crypto.randomBytes(length).toString('hex')
-    // console.log(value)
     return value
 }
+
+// Download images with specified urls into folder named with id.
+// Returns local paths for images that will be used by ffmpeg.
 const downloadImages = async (id, urls) => {
     let dir = `${__dirname}/${id}`;
     if (!fs.existsSync(dir)) {
@@ -52,7 +55,6 @@ const downloadImages = async (id, urls) => {
     for (const url of urls) {
         const path = `${dir}/${++i}.jpg`
         await downloadImage(url, path)
-        // console.log('pushed path:' + path)
         paths.push(path)
     }
 
@@ -69,15 +71,15 @@ const downloadImage = async (url, filepath) => {
         response.data.pipe(fs.createWriteStream(filepath))
             .on('error', reject)
             .once('close', () => {
-                // console.log('Done', filepath)
                 resolve(filepath)
             });
     });
 }
 
+// Scales and aligns images specified by path to full-hd resolution using Imagemagick.
+// If picture's aspect ratio differs from full hd resolution method fixes it filling with specified color.
 const alignPictures = async (id, paths) => {
     const result = execSync(`convert ${__dirname}/${id}/*.jpg -resize 1920x1080 -gravity center -background "#222529" -extent 1920x1080 ${__dirname}/${id}/ready${paths.length > 1 ? '' : '-0'}.jpg`)
-    // console.log('align pics result: ', result)
     for (let i = 0; i < paths.length; i++) {
         paths[i] = `${__dirname}/${id}/ready-${i}.jpg`
     }
@@ -86,9 +88,9 @@ const alignPictures = async (id, paths) => {
 const deleteFile = (id) => {
     let dir = `${__dirname}/${id}`
     fs.rmSync(dir, { recursive: true, force: true });
-    // console.log('Folder deleted: ' + dir);
 }
 
+// Uploads generated video to firebase and deletes local file afterwards
 const uploadVideo = async (id, userID) => {
     const fileName = id + '.mp4'
     try {
@@ -98,13 +100,12 @@ const uploadVideo = async (id, userID) => {
         const url = await getDownloadURL(storageRef)
         videoUrls[`${id}`] = url
         deleteFile(fileName)
-        // console.log('Download url: ', url);
-        // console.log(videoUrls[`${id}`])
     } catch (error) {
         console.log(error)
     }
 }
 
+// Builds up ffmpeg command and executes it to make a video specified by instructions
 const createVideo = (id, instructions, paths) => {
 
     videoStatuses[`${id}`] = 'IN_PROGRESS'
@@ -126,7 +127,6 @@ const createVideo = (id, instructions, paths) => {
             const isPreLast = (i + 2 === instructions.slideshow.length)
             commandArgs.push('-loop', '1', '-t', slide.duration + (amountOfSlides > 1 ? (isFirstOrLast ? 1 : durationAddition) : 0), '-i', paths[i])
 
-            // console.log('transition from slide is: ', slide.transition)
             if (amountOfSlides > 1) {
                 accumulatedOffset += slide.duration
                 if (!isLast) {
@@ -136,31 +136,37 @@ const createVideo = (id, instructions, paths) => {
             }
         })
 
-        // console.log('transition:', transition)
-        // console.log('amount ', amountOfSlides)
+        if (instructions.soundtrack) {
+            commandArgs.push('-i', instructions.soundtrack)
+        }
+
         if (amountOfSlides > 1) {
             commandArgs.push('-filter_complex', transition)
-            commandArgs.push('-c:v', 'libx264', '-r', '25', '-map', `[out${i}]`)
+            commandArgs.push('-c:v', 'libx264', '-r', '25', '-map', `[out${i}]`, '-c:a', 'copy',)
         } else {
             commandArgs.push('-filter_complex', `concat=n=${urls.length}:v=1:a=0`, '-c:v', 'libx264')
         }
 
+        if (instructions.soundtrack) {
+            commandArgs.push('-shortest', '-map', `${urls.length}:a:0`)
+        }
+
         commandArgs.push(`${id}.mp4`)
 
-        // console.log('commandArgs', commandArgs.join(" "))
+        // console.log('ffmpeg', commandArgs.join(" "))
 
         const ffmpeg = spawn('ffmpeg', commandArgs)
 
         ffmpeg.stdout.on('data', (data) => {
-            // console.log(`stdout: ${data}`);
+            console.log(`stdout: ${data}`);
         });
 
         ffmpeg.stderr.on('data', (data) => {
-            // console.error(`stderr: ${data}`);
+            console.error(`stderr: ${data}`);
         });
 
         ffmpeg.on('close', async (code) => {
-            // console.log(`child process exited with code ${code}`);
+            console.log(`child process exited with code ${code}`);
             if (code === 0) {
                 await uploadVideo(id, instructions.userID)
                 videoStatuses[`${id}`] = 'READY'
@@ -179,15 +185,15 @@ const createVideo = (id, instructions, paths) => {
 
 }
 
+// The endpoint receives the settings from the frontend, responces with the order ID and starts the video creation processes.
 app.post('/video', cors(corsOptions), async (req, res) => {
     // console.log('post video', req.body)
     const id = randomValue(32)
 
     const urls = req.body.slideshow.map(slide => {
-        return slide.src
+        return slide.url
     })
 
-    // console.log(urls)
     const paths = await downloadImages(id, urls)
     alignPictures(id, paths)
     createVideo(id, req.body, paths)
@@ -196,8 +202,8 @@ app.post('/video', cors(corsOptions), async (req, res) => {
     res.json({ id })
 })
 
+// The endpoint returns video statuses (requested periodically from the frontend). In the case of a READY status, it also returns a link to the uploaded video.
 app.get('/status/:id', (req, res) => {
-    // console.log('check status')
     const result = {}
     result.status = videoStatuses[`${req.params.id}`] === undefined ? 'UNKNOWN' : videoStatuses[`${req.params.id}`];
     if (result.status === 'READY') {
