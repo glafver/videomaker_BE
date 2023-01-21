@@ -79,7 +79,7 @@ const downloadImage = async (url, filepath) => {
 // Scales and aligns images specified by path to full-hd resolution using Imagemagick.
 // If picture's aspect ratio differs from full hd resolution method fixes it filling with specified color.
 const alignPictures = async (id, paths) => {
-    const result = execSync(`convert ${__dirname}/${id}/*.jpg -resize 1920x1080 -gravity center -background "#222529" -extent 1920x1080 ${__dirname}/${id}/ready${paths.length > 1 ? '' : '-0'}.jpg`)
+    const result = execSync(`convert ${__dirname}/${id}/*.jpg -resize 1024x576 -gravity center -background "#222529" -extent 1024x576 ${__dirname}/${id}/ready${paths.length > 1 ? '' : '-0'}.jpg`)
     for (let i = 0; i < paths.length; i++) {
         paths[i] = `${__dirname}/${id}/ready-${i}.jpg`
     }
