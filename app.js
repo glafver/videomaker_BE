@@ -188,7 +188,8 @@ const createVideo = (id, instructions, paths) => {
 // The endpoint receives the settings from the frontend, responces with the order ID and starts the video creation processes.
 app.post('/video', cors(corsOptions), async (req, res) => {
     // console.log('post video', req.body)
-    const id = randomValue(32)
+
+    const id = req.body.orderId ? req.body.orderId : randomValue(32)
 
     const urls = req.body.slideshow.map(slide => {
         return slide.url
