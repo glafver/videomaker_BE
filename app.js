@@ -142,9 +142,9 @@ const createVideo = (id, instructions, paths) => {
 
         if (amountOfSlides > 1) {
             commandArgs.push('-filter_complex', transition)
-            commandArgs.push('-c:v', 'libx264', '-r', '25', '-map', `[out${i}]`, '-c:a', 'copy',)
+            commandArgs.push('-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-r', '25', '-map', `[out${i}]`, '-c:a', 'copy',)
         } else {
-            commandArgs.push('-filter_complex', `concat=n=${urls.length}:v=1:a=0`, '-c:v', 'libx264')
+            commandArgs.push('-filter_complex', `concat=n=${urls.length}:v=1:a=0`, '-c:v', 'libx264', '-pix_fmt', 'yuv420p')
         }
 
         if (instructions.soundtrack) {
